@@ -5,6 +5,7 @@ FLIPROSE Finite Element Method Program <br>with<br> Strain Space Multiple Mechan
 Multi-Objective Bayesian Optimization incorporating an FEM Framework for Calibrating Sandy Soil using Cyclic Loading Tests<br>SOILDYN-D-25-00762<br>Date of Submission (Rough Draft) : 11th April 2025 (On peer review)
 
 # Program Version Inforamtion
-#Test
-#This is a Test
-##This is a Test2
+FLIPROSE : <br>
+Python : 3.11.5<br>
+Botorch : 0.9.2<br>
+AX platform : 0.3.4<br>
