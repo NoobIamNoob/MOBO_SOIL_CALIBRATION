@@ -1,4 +1,11 @@
-# 
+#This is a prototype code that is used in the paper.
+#This case tries to optimize a Sigma_v_100_kPa, Tau_initial_0_kPa scenario, which includes 7 CSR values (0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.25).
+#This code uses an MSEvar metric (Please refer to my paper to understand what MSEvar is).
+#I personally don't recommend referring to this since it uses hard coding.
+#In addition, there is a problem that the RAM usage keeps increasing even though there is enough RAM capacity (24GB) due to the structure of the code.
+#On top of that, it seems like there is a problem with the setting of the reference point. The reference point was set to [0,0,0,0,0,0] but considering that the optimization problem is a minimization problem,
+#I think the reference point should have been set to large values, not (0,0,0,0,0,0)
+# Please check the revised code below the original_code file on the left side. 
 
 import torch
 from ax.plot.pareto_frontier import plot_pareto_frontier
