@@ -1,1 +1,1273 @@
-code
+# 
+
+import torch
+from ax.plot.pareto_frontier import plot_pareto_frontier
+from ax.plot.pareto_utils import compute_posterior_pareto_frontier
+from ax.service.ax_client import AxClient
+from ax.service.utils.instantiation import ObjectiveProperties
+from ax.utils.notebook.plotting import init_notebook_plotting, render
+from botorch.test_functions.multi_objective import BraninCurrin
+from scipy.interpolate import interp1d
+import pandas as pd
+from ax.modelbridge.registry import Models
+import re
+from ax import Runner
+from ax import (
+    ParameterType,
+    RangeParameter,
+    SearchSpace,
+    Experiment,
+    Objective,
+    Metric,
+    Data
+)
+import subprocess
+import os
+from ax.utils.common.result import Ok
+import matplotlib
+import numpy as np
+from ax.core.data import Data
+from ax.core.experiment import Experiment
+from ax.core.metric import Metric
+from ax.core.objective import MultiObjective, Objective
+from ax.core.optimization_config import (
+    MultiObjectiveOptimizationConfig,
+    ObjectiveThreshold,
+)
+from ax.core.parameter import ParameterType, RangeParameter
+from ax.core.search_space import SearchSpace
+from ax.modelbridge.cross_validation import compute_diagnostics, cross_validate
+from ax.modelbridge.modelbridge_utils import observed_hypervolume
+from ax.models.torch.botorch_modular.surrogate import Surrogate
+from ax.plot.contour import plot_contour
+from ax.plot.diagnostic import tile_cross_validation
+from ax.service.utils.report_utils import exp_to_df
+from botorch.models.fully_bayesian import SaasFullyBayesianSingleTaskGP
+from botorch.utils.multi_objective.box_decompositions.dominated import (
+    DominatedPartitioning,
+)
+from matplotlib import pyplot as plt
+from matplotlib.cm import ScalarMappable
+from ax.metrics.noisy_function import NoisyFunctionMetric
+from ax.modelbridge.factory import get_MOO_EHVI, get_MOO_PAREGO
+from ax.runners.synthetic import SyntheticRunner
+
+init_notebook_plotting()
+
+LRC100_data1 = []
+LRC100_CSR1 = [0.17,0.18,0.19,0.20,0.21,0.22,0.25]
+SIM_LRC100_CSR = LRC100_CSR1
+
+LRC100_data2 = []
+LRC100_CSR2 = [0.17,0.18,0.19,0.20,0.21,0.22,0.25]
+SIM_LRC100_CSR = LRC100_CSR2
+
+LRC100_data3 = []
+LRC100_CSR3 = [0.17,0.18,0.19,0.20,0.21,0.22,0.25]
+SIM_LRC100_CSR = LRC100_CSR3
+
+LRC100_data4 = []
+LRC100_CSR4 = [0.17,0.18,0.19,0.20,0.21,0.22,0.25]
+SIM_LRC100_CSR = LRC100_CSR4
+
+LRC100_data5 = []
+LRC100_CSR5 = [0.17,0.18,0.19,0.20,0.21,0.22,0.25]
+SIM_LRC100_CSR = LRC100_CSR5
+
+LRC100_data6 = []
+LRC100_CSR6 = [0.17,0.18,0.19,0.20,0.21,0.22,0.25]
+SIM_LRC100_CSR = LRC100_CSR6
+
+liquefaction_criteria = [3.0, 4.0, 4.9, 0.25, 0.50, 0.90]
+
+sig100_17 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_170_Tau_0_.csv')
+sig100_18 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_180_Tau_0_.csv')
+sig100_19 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_190_Tau_0_.csv')
+sig100_20 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_200_Tau_0_.csv')
+sig100_21 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_210_Tau_0_.csv')
+sig100_22 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_220_Tau_0_.csv')
+sig100_25 = pd.read_csv('C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_250_Tau_0_.csv')
+
+sig100_17_x1 = sig100_17.iloc[:, 0]
+sig100_17_y1 = sig100_17.iloc[:, 1]
+sig100_17_epwp1 = sig100_17.iloc[:,5]
+sig100_17_x1 = np.insert(sig100_17_x1.values, 0, 0)
+sig100_17_y1 = np.insert(sig100_17_y1.values, 0, 0)
+sig100_17_epwp1 = np.insert(sig100_17_epwp1.values, 0, 0)
+sig100_17_max_x1 = np.ceil(np.max(sig100_17_x1))
+sig100_17_x1 = np.append(sig100_17_x1, sig100_17_max_x1)
+sig100_17_y1 = np.append(sig100_17_y1, sig100_17_y1[-1])
+sig100_17_epwp1 = np.append(sig100_17_epwp1, sig100_17_epwp1[-1])
+sig100_17_interpolate1 = interp1d(sig100_17_x1, sig100_17_y1, kind='linear')
+sig100_17_interpolate21 = interp1d(sig100_17_x1, sig100_17_epwp1, kind='linear')
+sig100_17_new_x1 = np.arange(0, sig100_17_max_x1, 0.05)
+sig100_17_new_y1 = sig100_17_interpolate1(sig100_17_new_x1)
+sig100_17_new_epwp1 = sig100_17_interpolate21(sig100_17_new_x1)
+sig100_17_noc_index1 = np.where(sig100_17_y1 > liquefaction_criteria[0])[0]
+if len(sig100_17_noc_index1) > 0:
+    sig100_17_noc1 = sig100_17.iloc[sig100_17_noc_index1[0], 0]
+    LRC100_data1.append(sig100_17_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_17 is {sig100_17_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_17.")
+
+sig100_18_x1 = sig100_18.iloc[:, 0]
+sig100_18_y1 = sig100_18.iloc[:, 1]
+sig100_18_epwp1 = sig100_18.iloc[:,5]
+sig100_18_x1 = np.insert(sig100_18_x1.values, 0, 0)
+sig100_18_y1 = np.insert(sig100_18_y1.values, 0, 0)
+sig100_18_epwp1 = np.insert(sig100_18_epwp1.values, 0, 0)
+sig100_18_max_x1 = np.ceil(np.max(sig100_18_x1))
+sig100_18_x1 = np.append(sig100_18_x1, sig100_18_max_x1)
+sig100_18_y1 = np.append(sig100_18_y1, sig100_18_y1[-1])
+sig100_18_epwp1 = np.append(sig100_18_epwp1, sig100_18_epwp1[-1])
+sig100_18_interpolate1 = interp1d(sig100_18_x1, sig100_18_y1, kind='linear')
+sig100_18_interpolate21 = interp1d(sig100_18_x1, sig100_18_epwp1, kind='linear')
+sig100_18_new_x1 = np.arange(0, sig100_18_max_x1, 0.05)
+sig100_18_new_y1 = sig100_18_interpolate1(sig100_18_new_x1)
+sig100_18_new_epwp1 = sig100_18_interpolate21(sig100_18_new_x1)
+sig100_18_noc_index1 = np.where(sig100_18_y1 > liquefaction_criteria[0])[0]
+if len(sig100_18_noc_index1) > 0:
+    sig100_18_noc1 = sig100_18.iloc[sig100_18_noc_index1[0], 0]
+    LRC100_data1.append(sig100_18_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_18 is {sig100_18_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_18.")
+
+sig100_19_x1 = sig100_19.iloc[:, 0]
+sig100_19_y1 = sig100_19.iloc[:, 1]
+sig100_19_epwp1 = sig100_19.iloc[:,5]
+sig100_19_x1 = np.insert(sig100_19_x1.values, 0, 0)
+sig100_19_y1 = np.insert(sig100_19_y1.values, 0, 0)
+sig100_19_epwp1 = np.insert(sig100_19_epwp1.values, 0, 0)
+sig100_19_max_x1 = np.ceil(np.max(sig100_19_x1))
+sig100_19_x1 = np.append(sig100_19_x1, sig100_19_max_x1)
+sig100_19_y1 = np.append(sig100_19_y1, sig100_19_y1[-1])
+sig100_19_epwp1 = np.append(sig100_19_epwp1, sig100_19_epwp1[-1])
+sig100_19_interpolate1 = interp1d(sig100_19_x1, sig100_19_y1, kind='linear')
+sig100_19_interpolate21 = interp1d(sig100_19_x1, sig100_19_epwp1, kind='linear')
+sig100_19_new_x1 = np.arange(0, sig100_19_max_x1, 0.05)
+sig100_19_new_y1 = sig100_19_interpolate1(sig100_19_new_x1)
+sig100_19_new_epwp1 = sig100_19_interpolate21(sig100_19_new_x1)
+sig100_19_noc_index1 = np.where(sig100_19_y1 > liquefaction_criteria[0])[0]
+if len(sig100_19_noc_index1) > 0:
+    sig100_19_noc1 = sig100_19.iloc[sig100_19_noc_index1[0], 0]
+    LRC100_data1.append(sig100_19_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_19 is {sig100_19_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_19.")
+
+sig100_20_x1 = sig100_20.iloc[:, 0]
+sig100_20_y1 = sig100_20.iloc[:, 1]
+sig100_20_epwp1 = sig100_20.iloc[:,5]
+sig100_20_x1 = np.insert(sig100_20_x1.values, 0, 0)
+sig100_20_y1 = np.insert(sig100_20_y1.values, 0, 0)
+sig100_20_epwp1 = np.insert(sig100_20_epwp1.values, 0, 0)
+sig100_20_max_x1 = np.ceil(np.max(sig100_20_x1))
+sig100_20_x1 = np.append(sig100_20_x1, sig100_20_max_x1)
+sig100_20_y1 = np.append(sig100_20_y1, sig100_20_y1[-1])
+sig100_20_epwp1 = np.append(sig100_20_epwp1, sig100_20_epwp1[-1])
+sig100_20_interpolate1 = interp1d(sig100_20_x1, sig100_20_y1, kind='linear')
+sig100_20_interpolate21 = interp1d(sig100_20_x1, sig100_20_epwp1, kind='linear')
+sig100_20_new_x1 = np.arange(0, sig100_20_max_x1, 0.05)
+sig100_20_new_y1 = sig100_20_interpolate1(sig100_20_new_x1)
+sig100_20_new_epwp1 = sig100_20_interpolate21(sig100_20_new_x1)
+sig100_20_noc_index1 = np.where(sig100_20_y1 > liquefaction_criteria[0])[0]
+if len(sig100_20_noc_index1) > 0:
+    sig100_20_noc1 = sig100_20.iloc[sig100_20_noc_index1[0], 0]
+    LRC100_data1.append(sig100_20_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_20 is {sig100_20_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_20.")
+
+sig100_21_x1 = sig100_21.iloc[:, 0]
+sig100_21_y1 = sig100_21.iloc[:, 1]
+sig100_21_epwp1 = sig100_21.iloc[:,5]
+sig100_21_x1 = np.insert(sig100_21_x1.values, 0, 0)
+sig100_21_y1 = np.insert(sig100_21_y1.values, 0, 0)
+sig100_21_epwp1 = np.insert(sig100_21_epwp1.values, 0, 0)
+sig100_21_max_x1 = np.ceil(np.max(sig100_21_x1))
+sig100_21_x1 = np.append(sig100_21_x1, sig100_21_max_x1)
+sig100_21_y1 = np.append(sig100_21_y1, sig100_21_y1[-1])
+sig100_21_epwp1 = np.append(sig100_21_epwp1, sig100_21_epwp1[-1])
+sig100_21_interpolate1 = interp1d(sig100_21_x1, sig100_21_y1, kind='linear')
+sig100_21_interpolate21 = interp1d(sig100_21_x1, sig100_21_epwp1, kind='linear')
+sig100_21_new_x1 = np.arange(0, sig100_21_max_x1, 0.05)
+sig100_21_new_y1 = sig100_21_interpolate1(sig100_21_new_x1)
+sig100_21_new_epwp1 = sig100_21_interpolate21(sig100_21_new_x1)
+sig100_21_noc_index1 = np.where(sig100_21_y1 > liquefaction_criteria[0])[0]
+if len(sig100_21_noc_index1) > 0:
+    sig100_21_noc1 = sig100_21.iloc[sig100_21_noc_index1[0], 0]
+    LRC100_data1.append(sig100_21_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_21 is {sig100_21_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_21.")
+
+sig100_22_x1 = sig100_22.iloc[:, 0]
+sig100_22_y1 = sig100_22.iloc[:, 1]
+sig100_22_epwp1 = sig100_22.iloc[:,5]
+sig100_22_x1 = np.insert(sig100_22_x1.values, 0, 0)
+sig100_22_y1 = np.insert(sig100_22_y1.values, 0, 0)
+sig100_22_epwp1 = np.insert(sig100_22_epwp1.values, 0, 0)
+sig100_22_max_x1 = np.ceil(np.max(sig100_22_x1))
+sig100_22_x1 = np.append(sig100_22_x1, sig100_22_max_x1)
+sig100_22_y1 = np.append(sig100_22_y1, sig100_22_y1[-1])
+sig100_22_epwp1 = np.append(sig100_22_epwp1, sig100_22_epwp1[-1])
+sig100_22_interpolate1 = interp1d(sig100_22_x1, sig100_22_y1, kind='linear')
+sig100_22_interpolate21 = interp1d(sig100_22_x1, sig100_22_epwp1, kind='linear')
+sig100_22_new_x1 = np.arange(0, sig100_22_max_x1, 0.05)
+sig100_22_new_y1 = sig100_22_interpolate1(sig100_22_new_x1)
+sig100_22_new_epwp1 = sig100_22_interpolate21(sig100_22_new_x1)
+sig100_22_noc_index1 = np.where(sig100_22_y1 > liquefaction_criteria[0])[0]
+if len(sig100_22_noc_index1) > 0:
+    sig100_22_noc1 = sig100_22.iloc[sig100_22_noc_index1[0], 0]
+    LRC100_data1.append(sig100_22_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_22 is {sig100_22_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_22.")
+
+sig100_25_x1 = sig100_25.iloc[:, 0]
+sig100_25_y1 = sig100_25.iloc[:, 1]
+sig100_25_epwp1 = sig100_25.iloc[:,5]
+sig100_25_x1 = np.insert(sig100_25_x1.values, 0, 0)
+sig100_25_y1 = np.insert(sig100_25_y1.values, 0, 0)
+sig100_25_epwp1 = np.insert(sig100_25_epwp1.values, 0, 0)
+sig100_25_max_x1 = np.ceil(np.max(sig100_25_x1))
+sig100_25_x1 = np.append(sig100_25_x1, sig100_25_max_x1)
+sig100_25_y1 = np.append(sig100_25_y1, sig100_25_y1[-1])
+sig100_25_epwp1 = np.append(sig100_25_epwp1, sig100_25_epwp1[-1])
+sig100_25_interpolate1 = interp1d(sig100_25_x1, sig100_25_y1, kind='linear')
+sig100_25_interpolate21 = interp1d(sig100_25_x1, sig100_25_epwp1, kind='linear')
+sig100_25_new_x1 = np.arange(0, sig100_25_max_x1, 0.05)
+sig100_25_new_y1 = sig100_25_interpolate1(sig100_25_new_x1)
+sig100_25_new_epwp1 = sig100_25_interpolate21(sig100_25_new_x1)
+sig100_25_noc_index1 = np.where(sig100_25_y1 > liquefaction_criteria[0])[0]
+if len(sig100_25_noc_index1) > 0:
+    sig100_25_noc1 = sig100_25.iloc[sig100_25_noc_index1[0], 0]
+    LRC100_data1.append(sig100_25_noc1)
+    print(f"The first x value where y exceeds {liquefaction_criteria[0]} in sig100_25 is {sig100_25_noc1}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[0]} in sig100_25.")
+
+sig100_17_noc_index2 = np.where(sig100_17_y1 > liquefaction_criteria[1])[0]
+if len(sig100_17_noc_index2) > 0:
+    sig100_17_noc2 = sig100_17.iloc[sig100_17_noc_index2[0], 0]
+    LRC100_data2.append(sig100_17_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_17 is {sig100_17_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_17.")
+
+sig100_18_noc_index2 = np.where(sig100_18_y1 > liquefaction_criteria[1])[0]
+if len(sig100_18_noc_index1) > 0:
+    sig100_18_noc2 = sig100_18.iloc[sig100_18_noc_index2[0], 0]
+    LRC100_data2.append(sig100_18_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_18 is {sig100_18_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_18.")
+
+sig100_19_noc_index2 = np.where(sig100_19_y1 > liquefaction_criteria[1])[0]
+if len(sig100_19_noc_index2) > 0:
+    sig100_19_noc2 = sig100_19.iloc[sig100_19_noc_index2[0], 0]
+    LRC100_data2.append(sig100_19_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_19 is {sig100_19_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_19.")
+
+sig100_20_noc_index2 = np.where(sig100_20_y1 > liquefaction_criteria[1])[0]
+if len(sig100_20_noc_index2) > 0:
+    sig100_20_noc2 = sig100_20.iloc[sig100_20_noc_index2[0], 0]
+    LRC100_data2.append(sig100_20_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_20 is {sig100_20_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_20.")
+
+sig100_21_noc_index2 = np.where(sig100_21_y1 > liquefaction_criteria[1])[0]
+if len(sig100_21_noc_index2) > 0:
+    sig100_21_noc2 = sig100_21.iloc[sig100_21_noc_index2[0], 0]
+    LRC100_data2.append(sig100_21_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_21 is {sig100_21_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_21.")
+
+sig100_22_noc_index2 = np.where(sig100_22_y1 > liquefaction_criteria[1])[0]
+if len(sig100_22_noc_index2) > 0:
+    sig100_22_noc2 = sig100_22.iloc[sig100_22_noc_index2[0], 0]
+    LRC100_data2.append(sig100_22_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_22 is {sig100_22_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_22.")
+
+sig100_25_noc_index2 = np.where(sig100_25_y1 > liquefaction_criteria[1])[0]
+if len(sig100_25_noc_index2) > 0:
+    sig100_25_noc2 = sig100_25.iloc[sig100_25_noc_index2[0], 0]
+    LRC100_data2.append(sig100_25_noc2)
+    print(f"The first x value where y exceeds {liquefaction_criteria[1]} in sig100_25 is {sig100_25_noc2}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[1]} in sig100_25.")
+
+sig100_17_noc_index3 = np.where(sig100_17_y1 > liquefaction_criteria[2])[0]
+if len(sig100_17_noc_index3) > 0:
+    sig100_17_noc3 = sig100_17.iloc[sig100_17_noc_index3[0], 0]
+    LRC100_data3.append(sig100_17_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_17 is {sig100_17_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_17.")
+
+sig100_18_noc_index3 = np.where(sig100_18_y1 > liquefaction_criteria[2])[0]
+if len(sig100_18_noc_index3) > 0:
+    sig100_18_noc3 = sig100_18.iloc[sig100_18_noc_index3[0], 0]
+    LRC100_data3.append(sig100_18_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_18 is {sig100_18_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_18.")
+
+sig100_19_noc_index3 = np.where(sig100_19_y1 > liquefaction_criteria[2])[0]
+if len(sig100_19_noc_index3) > 0:
+    sig100_19_noc3 = sig100_19.iloc[sig100_19_noc_index3[0], 0]
+    LRC100_data3.append(sig100_19_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_19 is {sig100_19_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_19.")
+
+sig100_20_noc_index3 = np.where(sig100_20_y1 > liquefaction_criteria[2])[0]
+if len(sig100_20_noc_index3) > 0:
+    sig100_20_noc3 = sig100_20.iloc[sig100_20_noc_index3[0], 0]
+    LRC100_data3.append(sig100_20_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_20 is {sig100_20_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_20.")
+
+sig100_21_noc_index3 = np.where(sig100_21_y1 > liquefaction_criteria[2])[0]
+if len(sig100_21_noc_index3) > 0:
+    sig100_21_noc3 = sig100_21.iloc[sig100_21_noc_index3[0], 0]
+    LRC100_data3.append(sig100_21_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_21 is {sig100_21_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_21.")
+
+sig100_22_noc_index3 = np.where(sig100_22_y1 > liquefaction_criteria[2])[0]
+if len(sig100_22_noc_index3) > 0:
+    sig100_22_noc3 = sig100_22.iloc[sig100_22_noc_index3[0], 0]
+    LRC100_data3.append(sig100_22_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_22 is {sig100_22_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_22.")
+
+sig100_25_noc_index3 = np.where(sig100_25_y1 > liquefaction_criteria[2])[0]
+if len(sig100_25_noc_index3) > 0:
+    sig100_25_noc3 = sig100_25.iloc[sig100_25_noc_index3[0], 0]
+    LRC100_data3.append(sig100_25_noc3)
+    print(f"The first x value where y exceeds {liquefaction_criteria[2]} in sig100_25 is {sig100_25_noc3}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[2]} in sig100_25.")
+
+sig100_17_noc_index4 = np.where(sig100_17_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_17_noc_index4) > 0:
+    sig100_17_noc4 = sig100_17.iloc[sig100_17_noc_index4[0], 0]
+    LRC100_data4.append(sig100_17_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_17 is {sig100_17_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_17.")
+
+sig100_18_noc_index4 = np.where(sig100_18_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_18_noc_index4) > 0:
+    sig100_18_noc4 = sig100_18.iloc[sig100_18_noc_index4[0], 0]
+    LRC100_data4.append(sig100_18_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_18 is {sig100_18_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_18.")
+
+sig100_19_noc_index4 = np.where(sig100_19_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_19_noc_index4) > 0:
+    sig100_19_noc4 = sig100_19.iloc[sig100_19_noc_index4[0], 0]
+    LRC100_data4.append(sig100_19_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_19 is {sig100_19_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_19.")
+
+sig100_20_noc_index4 = np.where(sig100_20_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_20_noc_index4) > 0:
+    sig100_20_noc4 = sig100_20.iloc[sig100_20_noc_index4[0], 0]
+    LRC100_data4.append(sig100_20_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_20 is {sig100_20_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_20.")
+
+sig100_21_noc_index4 = np.where(sig100_21_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_21_noc_index4) > 0:
+    sig100_21_noc4 = sig100_21.iloc[sig100_21_noc_index4[0], 0]
+    LRC100_data4.append(sig100_21_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_21 is {sig100_21_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_21.")
+
+sig100_22_noc_index4 = np.where(sig100_22_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_22_noc_index4) > 0:
+    sig100_22_noc4 = sig100_22.iloc[sig100_22_noc_index4[0], 0]
+    LRC100_data4.append(sig100_22_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_22 is {sig100_22_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_22.")
+
+sig100_25_noc_index4 = np.where(sig100_25_epwp1 > liquefaction_criteria[3])[0]
+if len(sig100_25_noc_index4) > 0:
+    sig100_25_noc4 = sig100_25.iloc[sig100_25_noc_index4[0], 0]
+    LRC100_data4.append(sig100_25_noc4)
+    print(f"The first x value where y exceeds {liquefaction_criteria[3]} in sig100_25 is {sig100_25_noc4}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[3]} in sig100_25.")
+
+sig100_17_noc_index5 = np.where(sig100_17_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_17_noc_index5) > 0:
+    sig100_17_noc5 = sig100_17.iloc[sig100_17_noc_index5[0], 0]
+    LRC100_data5.append(sig100_17_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_17 is {sig100_17_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_17.")
+
+sig100_18_noc_index5 = np.where(sig100_18_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_18_noc_index5) > 0:
+    sig100_18_noc5 = sig100_18.iloc[sig100_18_noc_index5[0], 0]
+    LRC100_data5.append(sig100_18_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_18 is {sig100_18_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_18.")
+
+sig100_19_noc_index5 = np.where(sig100_19_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_19_noc_index5) > 0:
+    sig100_19_noc5 = sig100_19.iloc[sig100_19_noc_index5[0], 0]
+    LRC100_data5.append(sig100_19_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_19 is {sig100_19_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_19.")
+
+sig100_20_noc_index5 = np.where(sig100_20_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_20_noc_index5) > 0:
+    sig100_20_noc5 = sig100_20.iloc[sig100_20_noc_index5[0], 0]
+    LRC100_data5.append(sig100_20_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_20 is {sig100_20_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_20.")
+
+sig100_21_noc_index5 = np.where(sig100_21_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_21_noc_index5) > 0:
+    sig100_21_noc5 = sig100_21.iloc[sig100_21_noc_index5[0], 0]
+    LRC100_data5.append(sig100_21_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_21 is {sig100_21_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_21.")
+
+sig100_22_noc_index5 = np.where(sig100_22_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_22_noc_index5) > 0:
+    sig100_22_noc5 = sig100_22.iloc[sig100_22_noc_index5[0], 0]
+    LRC100_data5.append(sig100_22_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_22 is {sig100_22_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_22.")
+
+sig100_25_noc_index5 = np.where(sig100_25_epwp1 > liquefaction_criteria[4])[0]
+if len(sig100_25_noc_index5) > 0:
+    sig100_25_noc5 = sig100_25.iloc[sig100_25_noc_index5[0], 0]
+    LRC100_data5.append(sig100_25_noc5)
+    print(f"The first x value where y exceeds {liquefaction_criteria[4]} in sig100_25 is {sig100_25_noc5}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[4]} in sig100_25.")
+
+sig100_17_noc_index6 = np.where(sig100_17_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_17_noc_index6) > 0:
+    sig100_17_noc6 = sig100_17.iloc[sig100_17_noc_index6[0], 0]
+    LRC100_data6.append(sig100_17_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_17 is {sig100_17_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_17.")
+
+sig100_18_noc_index6 = np.where(sig100_18_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_18_noc_index6) > 0:
+    sig100_18_noc6 = sig100_18.iloc[sig100_18_noc_index6[0], 0]
+    LRC100_data6.append(sig100_18_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_18 is {sig100_18_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_18.")
+
+sig100_19_noc_index6 = np.where(sig100_19_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_19_noc_index6) > 0:
+    sig100_19_noc6 = sig100_19.iloc[sig100_19_noc_index6[0], 0]
+    LRC100_data6.append(sig100_19_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_19 is {sig100_19_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_19.")
+
+sig100_20_noc_index6 = np.where(sig100_20_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_20_noc_index6) > 0:
+    sig100_20_noc6 = sig100_20.iloc[sig100_20_noc_index6[0], 0]
+    LRC100_data6.append(sig100_20_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_20 is {sig100_20_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_20.")
+
+sig100_21_noc_index6 = np.where(sig100_21_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_21_noc_index6) > 0:
+    sig100_21_noc6 = sig100_21.iloc[sig100_21_noc_index6[0], 0]
+    LRC100_data6.append(sig100_21_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_21 is {sig100_21_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_21.")
+
+sig100_22_noc_index6 = np.where(sig100_22_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_22_noc_index6) > 0:
+    sig100_22_noc6 = sig100_22.iloc[sig100_22_noc_index6[0], 0]
+    LRC100_data6.append(sig100_22_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_22 is {sig100_22_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_22.")
+
+sig100_25_noc_index6 = np.where(sig100_25_epwp1 > liquefaction_criteria[5])[0]
+if len(sig100_25_noc_index6) > 0:
+    sig100_25_noc6 = sig100_25.iloc[sig100_25_noc_index6[0], 0]
+    LRC100_data6.append(sig100_25_noc6)
+    print(f"The first x value where y exceeds {liquefaction_criteria[5]} in sig100_25 is {sig100_25_noc6}.")
+else:
+    print(f"No y values exceed {liquefaction_criteria[5]} in sig100_25.")
+
+LRC100_1 = [(LRC100_data1[i], LRC100_CSR1[i]) for i in range(len(LRC100_data1))]
+print(LRC100_1)
+
+LRC100_2 = [(LRC100_data2[i], LRC100_CSR2[i]) for i in range(len(LRC100_data2))]
+print(LRC100_2)
+
+LRC100_3 = [(LRC100_data3[i], LRC100_CSR3[i]) for i in range(len(LRC100_data3))]
+print(LRC100_3)
+
+LRC100_4 = [(LRC100_data4[i], LRC100_CSR4[i]) for i in range(len(LRC100_data4))]
+print(LRC100_4)
+
+LRC100_5 = [(LRC100_data5[i], LRC100_CSR5[i]) for i in range(len(LRC100_data5))]
+print(LRC100_5)
+
+LRC100_6 = [(LRC100_data6[i], LRC100_CSR6[i]) for i in range(len(LRC100_data6))]
+print(LRC100_6)
+
+data1_list = []
+data2_list = []
+data3_list = []
+
+with open("C:/Graduation/PARAMETERS_SIMULATION/DATA/100_0.17/stat1.d", 'r') as f:
+    data1 = f.readlines()
+data1_list = [re.split('(\s+)', line) for line in data1]
+
+with open("C:/Graduation/PARAMETERS_SIMULATION/DATA/100_0.17/stat2.d", 'r') as f:
+    data2 = f.readlines()
+data2_list = [re.split('(\s+)', line) for line in data2]
+
+with open("C:/Graduation/PARAMETERS_SIMULATION/DATA/100_0.17/stat3.d", 'r') as f:
+    data3 = f.readlines()
+data3_list = [re.split('(\s+)', line) for line in data3]
+
+PA3= data3_list[8][2]
+GMA3= data3_list[8][4]
+MG3= data3_list[8][6]
+KLA3= data3_list[8][8]
+KUA3= data3_list[8][10]
+NK3= data3_list[8][12]
+AA3= data3_list[8][14]
+BB3 = data3_list[8][16]
+RHO3= data3_list[10][2]
+N3= data3_list[10][4]
+KF3= data3_list[10][6]
+WIDTH3= data3_list[10][8]
+L3= data3_list[10][10]
+JOINTS3= data3_list[10][12]
+LR3= data3_list[10][14]
+IAABB3= data3_list[10][16]
+FAABB3= data3_list[10][18]
+IUST3= data3_list[10][20]
+KILL3 = data3_list[10][22]
+HMAX3= data3_list[12][2]
+PR03= data3_list[12][4]
+PRY3= data3_list[12][6]
+HMAXL3= data3_list[12][8]
+IS123= data3_list[12][10]
+IRYL3= data3_list[12][12]
+ALPHAE3= data3_list[12][14]
+BETAE3= data3_list[12][16]
+NSPR43= data3_list[12][18]
+IDLSW3 = data3_list[12][20]
+COH3= data3_list[14][2]
+PHIF3= data3_list[14][4]
+PHIP3= data3_list[14][6]
+EPSCM3= data3_list[14][8]
+REPSDC3= data3_list[14][10]
+ITERMD3= data3_list[14][12]
+STOL3 = data3_list[14][14]
+REPSD3= data3_list[16][2]
+Q13= data3_list[16][4]
+Q23= data3_list[16][6]
+RKPP3= data3_list[16][8]
+PLK3= data3_list[16][10]
+RK3= data3_list[16][12]
+S13= data3_list[16][14]
+C13 = data3_list[16][16]
+QUS3= data3_list[18][2]
+Q43= data3_list[18][4]
+RGAMMA3= data3_list[18][6]
+RRMTMP3= data3_list[18][8]
+I865SW3 = data3_list[18][10]
+
+def MSE1():
+    folders = [
+        '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+    ]
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {
+            'time': time,
+            'pex': pex,
+            'strain': strain,
+            'number_of_rows': number_of_rows
+        }
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        lrc_cycle2 = None
+        lrc_cycle3 = None
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[0]*0.01 :
+                lrc_cycle1 = time[i]
+                break
+            else: lrc_cycle1 = 100
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[1]*0.01 :
+                lrc_cycle2 = time[i]
+                break
+            else: lrc_cycle2 = 100
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[2]*0.01 :
+                lrc_cycle3 = time[i]
+                break
+            else: lrc_cycle3 = 100
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+        data[folder]['lrc_cycle2'] = lrc_cycle2
+        data[folder]['lrc_cycle3'] = lrc_cycle3
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-sig100_17_noc1,
+        data['100_0.18']['lrc_cycle1']-sig100_18_noc1,
+        data['100_0.19']['lrc_cycle1']-sig100_19_noc1,
+        data['100_0.20']['lrc_cycle1']-sig100_20_noc1,
+        data['100_0.21']['lrc_cycle1']-sig100_21_noc1,
+        data['100_0.22']['lrc_cycle1']-sig100_22_noc1,
+        data['100_0.25']['lrc_cycle1']-sig100_25_noc1
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1)
+    return MSE_1001
+
+def MSE2():
+    folders = [
+        '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+    ]
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {
+            'time': time,
+            'pex': pex,
+            'strain': strain,
+            'number_of_rows': number_of_rows
+        }
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        lrc_cycle2 = None
+        lrc_cycle3 = None
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[0]*0.01 :
+                lrc_cycle1 = time[i]
+                break
+            else: lrc_cycle1 = 100
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[1]*0.01 :
+                lrc_cycle2 = time[i]
+                break
+            else: lrc_cycle2 = 100
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[2]*0.01 :
+                lrc_cycle3 = time[i]
+                break
+            else: lrc_cycle3 = 100
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+        data[folder]['lrc_cycle2'] = lrc_cycle2
+        data[folder]['lrc_cycle3'] = lrc_cycle3
+    discrepancies_1002 = [
+        data['100_0.17']['lrc_cycle2']-sig100_17_noc2,
+        data['100_0.18']['lrc_cycle2']-sig100_18_noc2,
+        data['100_0.19']['lrc_cycle2']-sig100_19_noc2,
+        data['100_0.20']['lrc_cycle2']-sig100_20_noc2,
+        data['100_0.21']['lrc_cycle2']-sig100_21_noc2,
+        data['100_0.22']['lrc_cycle2']-sig100_22_noc2,
+        data['100_0.25']['lrc_cycle2']-sig100_25_noc2
+    ]
+    MSE_1002 = np.mean(np.square(discrepancies_1002))/np.std(np.abs(discrepancies_1002), ddof=1)
+    return MSE_1002
+
+def MSE3():
+    folders = [
+        '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+    ]
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {
+            'time': time,
+            'pex': pex,
+            'strain': strain,
+            'number_of_rows': number_of_rows
+        }
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        lrc_cycle2 = None
+        lrc_cycle3 = None
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[0]*0.01 :
+                lrc_cycle1 = time[i]
+                break
+            else: lrc_cycle1 = 100
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[1]*0.01 :
+                lrc_cycle2 = time[i]
+                break
+            else: lrc_cycle2 = 100
+        for i in range(len(strain)):
+            if strain[i] > liquefaction_criteria[2]*0.01 :
+                lrc_cycle3 = time[i]
+                break
+            else: lrc_cycle3 = 100
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+        data[folder]['lrc_cycle2'] = lrc_cycle2
+        data[folder]['lrc_cycle3'] = lrc_cycle3
+    discrepancies_1003 = [
+        data['100_0.17']['lrc_cycle3']-sig100_17_noc3,
+        data['100_0.18']['lrc_cycle3']-sig100_18_noc3,
+        data['100_0.19']['lrc_cycle3']-sig100_19_noc3,
+        data['100_0.20']['lrc_cycle3']-sig100_20_noc3,
+        data['100_0.21']['lrc_cycle3']-sig100_21_noc3,
+        data['100_0.22']['lrc_cycle3']-sig100_22_noc3,
+        data['100_0.25']['lrc_cycle3']-sig100_25_noc3
+    ]
+    MSE_1003 = np.mean(np.square(discrepancies_1003))/np.std(np.abs(discrepancies_1003), ddof=1)
+    return MSE_1003
+
+def MSE4():
+    folders = [
+        '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+    ]
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {
+            'time': time,
+            'pex': pex,
+            'strain': strain,
+            'number_of_rows': number_of_rows
+        }
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        lrc_cycle4 = None
+        for i in range(len(strain)):
+            if pex[i] > liquefaction_criteria[3] :
+                lrc_cycle4 = time[i]
+                break
+            else: lrc_cycle4 = 100
+        data[folder]['lrc_cycle4'] = lrc_cycle4
+    discrepancies_1004 = [
+        data['100_0.17']['lrc_cycle4']-sig100_17_noc4,
+        data['100_0.18']['lrc_cycle4']-sig100_18_noc4,
+        data['100_0.19']['lrc_cycle4']-sig100_19_noc4,
+        data['100_0.20']['lrc_cycle4']-sig100_20_noc4,
+        data['100_0.21']['lrc_cycle4']-sig100_21_noc4,
+        data['100_0.22']['lrc_cycle4']-sig100_22_noc4,
+        data['100_0.25']['lrc_cycle4']-sig100_25_noc4
+    ]
+    MSE_1004 = np.mean(np.square(discrepancies_1004))/np.std(np.abs(discrepancies_1004), ddof=1)
+    return MSE_1004
+
+def MSE5():
+    folders = [
+        '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+    ]
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {
+            'time': time,
+            'pex': pex,
+            'strain': strain,
+            'number_of_rows': number_of_rows
+        }
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        lrc_cycle5 = None
+        for i in range(len(strain)):
+            if pex[i] > liquefaction_criteria[4] :
+                lrc_cycle5 = time[i]
+                break
+            else: lrc_cycle5 = 100
+        data[folder]['lrc_cycle5'] = lrc_cycle5
+    discrepancies_1005 = [
+        data['100_0.17']['lrc_cycle5']-sig100_17_noc5,
+        data['100_0.18']['lrc_cycle5']-sig100_18_noc5,
+        data['100_0.19']['lrc_cycle5']-sig100_19_noc5,
+        data['100_0.20']['lrc_cycle5']-sig100_20_noc5,
+        data['100_0.21']['lrc_cycle5']-sig100_21_noc5,
+        data['100_0.22']['lrc_cycle5']-sig100_22_noc5,
+        data['100_0.25']['lrc_cycle5']-sig100_25_noc5
+    ]
+    MSE_1005 = np.mean(np.square(discrepancies_1005))/np.std(np.abs(discrepancies_1005), ddof=1)
+    return MSE_1005
+
+def MSE6():
+    folders = [
+        '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+    ]
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {
+            'time': time,
+            'pex': pex,
+            'strain': strain,
+            'number_of_rows': number_of_rows
+        }
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        lrc_cycle6 = None
+        for i in range(len(strain)):
+            if pex[i] > liquefaction_criteria[5] :
+                lrc_cycle6 = time[i]
+                break
+            else: lrc_cycle6 = 100
+        data[folder]['lrc_cycle6'] = lrc_cycle6
+    discrepancies_1006 = [
+        data['100_0.17']['lrc_cycle6']-sig100_17_noc6,
+        data['100_0.18']['lrc_cycle6']-sig100_18_noc6,
+        data['100_0.19']['lrc_cycle6']-sig100_19_noc6,
+        data['100_0.20']['lrc_cycle6']-sig100_20_noc6,
+        data['100_0.21']['lrc_cycle6']-sig100_21_noc6,
+        data['100_0.22']['lrc_cycle6']-sig100_22_noc6,
+        data['100_0.25']['lrc_cycle6']-sig100_25_noc6
+    ]
+    MSE_1006 = np.mean(np.square(discrepancies_1006))/np.std(np.abs(discrepancies_1006), ddof=1)
+    return MSE_1006
+
+def run_sim(base_dir, folders):
+    """
+    Execute the FLIP_GROUP.BAT batch files in specified directories.
+
+    Parameters:
+    - base_dir: The base directory where the folders are located.
+    - folders: A list of folder names within the base directory.
+    """
+    for folder in folders:
+        bat_file_path = os.path.join(base_dir, folder, 'FLIP_GROUP.BAT')
+        os.chdir(os.path.dirname(bat_file_path))
+        try:
+            subprocess.run([bat_file_path], check=True, shell=True)
+        except subprocess.CalledProcessError as e:
+            print(f"BAT 파일 실행에 실패했습니다: {e}")
+            print("Return code:", e.returncode)
+
+base_dir = r'C:\Graduation\PARAMETERS_SIMULATION\DATA'
+folders = [
+    '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+]
+
+d = 7
+parameters = [
+    {"name": "EPSCM3_AX", "lower": 0.10, "upper": 0.40, "digits": 2},
+    {"name": "REPSDC3_AX", "lower": 0.01, "upper": 5.00, "digits": 2},
+    {"name": "REPSD3_AX", "lower": 0.001, "upper": 5.000, "digits": 3},
+    {"name": "Q13_AX", "lower": 1.00, "upper": 10.00, "digits": 2},
+    {"name": "Q23_AX", "lower": 0.01, "upper": 2.00, "digits": 2},
+    {"name": "C13_AX", "lower": 1.00, "upper": 5.00, "digits": 2},
+    {"name": "PHIP3_AX", "lower": 20.00, "upper": 37.99, "digits": 2}
+]
+
+search_space = SearchSpace(
+    parameters=[
+        RangeParameter(
+            name=param["name"],
+            parameter_type=ParameterType.FLOAT,
+            lower=param["lower"],
+            upper=param["upper"],
+            digits=param["digits"]
+        )
+        for param in parameters
+    ]
+)
+
+class MetricA(Metric):
+    def fetch_trial_data(self, trial):
+        records = []
+        for arm_name, arm in trial.arms_by_name.items():
+            mse_value = MSE1()
+            sem = 0
+            records.append({
+                "arm_name": arm_name,
+                "metric_name": self.name,
+                "trial_index": trial.index,
+                "mean": mse_value,
+                "sem": sem,
+            })
+        data = Data(df=pd.DataFrame.from_records(records))
+        return Ok(data)
+
+class MetricB(Metric):
+    def fetch_trial_data(self, trial):
+        records = []
+        for arm_name, arm in trial.arms_by_name.items():
+            mse_value = MSE2()
+            sem = 0
+            records.append({
+                "arm_name": arm_name,
+                "metric_name": self.name,
+                "trial_index": trial.index,
+                "mean": mse_value,
+                "sem": sem,
+            })
+        data = Data(df=pd.DataFrame.from_records(records))
+        return Ok(data)
+
+class MetricC(Metric):
+    def fetch_trial_data(self, trial):
+        records = []
+        for arm_name, arm in trial.arms_by_name.items():
+            mse_value = MSE3()
+            sem = 0
+            records.append({
+                "arm_name": arm_name,
+                "metric_name": self.name,
+                "trial_index": trial.index,
+                "mean": mse_value,
+                "sem": sem,
+            })
+        data = Data(df=pd.DataFrame.from_records(records))
+        return Ok(data)
+
+class MetricD(Metric):
+    def fetch_trial_data(self, trial):
+        records = []
+        for arm_name, arm in trial.arms_by_name.items():
+            mse_value = MSE4()
+            sem = 0
+            records.append({
+                "arm_name": arm_name,
+                "metric_name": self.name,
+                "trial_index": trial.index,
+                "mean": mse_value,
+                "sem": sem,
+            })
+        data = Data(df=pd.DataFrame.from_records(records))
+        return Ok(data)
+
+class MetricE(Metric):
+    def fetch_trial_data(self, trial):
+        records = []
+        for arm_name, arm in trial.arms_by_name.items():
+            mse_value = MSE5()
+            sem = 0
+            records.append({
+                "arm_name": arm_name,
+                "metric_name": self.name,
+                "trial_index": trial.index,
+                "mean": mse_value,
+                "sem": sem,
+            })
+        data = Data(df=pd.DataFrame.from_records(records))
+        return Ok(data)
+
+class MetricF(Metric):
+    def fetch_trial_data(self, trial):
+        records = []
+        for arm_name, arm in trial.arms_by_name.items():
+            mse_value = MSE6()
+            sem = 0
+            records.append({
+                "arm_name": arm_name,
+                "metric_name": self.name,
+                "trial_index": trial.index,
+                "mean": mse_value,
+                "sem": sem,
+            })
+        data = Data(df=pd.DataFrame.from_records(records))
+        return Ok(data)
+
+metric_a = MetricA(name="a",  lower_is_better=True)
+metric_b = MetricB(name="b",  lower_is_better=True)
+metric_c = MetricC(name="c",  lower_is_better=True)
+metric_d = MetricD(name="d",  lower_is_better=True)
+metric_e = MetricE(name="e",  lower_is_better=True)
+metric_f = MetricF(name="f",  lower_is_better=True)
+
+mo = MultiObjective(
+    objectives=[Objective(metric=metric_a), Objective(metric=metric_b), Objective(metric=metric_c),Objective(metric=metric_d), Objective(metric=metric_e),Objective(metric=metric_f)]
+)
+optimization_config = MultiObjectiveOptimizationConfig(
+    objective=mo
+)
+
+class MyRunner(Runner):
+    def run(self, trial):
+        for arm_name, arm in trial.arms_by_name.items():
+            ax_params = arm.parameters
+            print(f"Current trial parameters: {ax_params}")
+            for folder in folders:
+                file_path = f"{base_dir}/{folder}/stat3.d"
+                with open(file_path, 'r') as f:
+                    data3 = f.readlines()
+                data3_list = [re.split('(\s+)', line) for line in data3]
+                data3_list[14][8] = str(ax_params['EPSCM3_AX'])
+                data3_list[14][10] = str(ax_params['REPSDC3_AX'])
+                data3_list[16][2] = str(ax_params['REPSD3_AX'])
+                data3_list[16][4] = str(ax_params['Q13_AX'])
+                data3_list[16][6] = str(ax_params['Q23_AX'])
+                data3_list[16][16] = str(ax_params['C13_AX'])
+                data3_list[14][6] = str(ax_params['PHIP3_AX'])
+                with open(file_path, 'w') as f:
+                    for line in data3_list:
+                        f.write("".join(line))
+            run_sim(base_dir,folders)
+            mse1_val = MSE1()
+            mse2_val = MSE2()
+            mse3_val = MSE3()
+            mse4_val = MSE4()
+            mse5_val = MSE5()
+            mse6_val = MSE6()
+            print(f"MSE1: {mse1_val}")
+            print(f"MSE2: {mse2_val}")
+            print(f"MSE3: {mse3_val}")
+            print(f"MSE4: {mse4_val}")
+            print(f"MSE5: {mse5_val}")
+            print(f"MSE6: {mse6_val}")
+        return mse1_val, mse2_val, mse3_val, mse4_val, mse5_val, mse6_val
+
+N_INIT = 500
+N_BATCH = 500
+experiment = Experiment(
+    name="pareto_experiment",
+    search_space=search_space,
+    optimization_config=optimization_config,
+    runner=MyRunner(),
+)
+results_df = pd.DataFrame(columns=["Trial", "Parameters", "MAE", "MAESEM", "MSE", "MSESEM"])
+
+print(f"Running Sobol initialization trials...")
+sobol = Models.SOBOL(search_space=experiment.search_space)
+
+for i in range(N_INIT):
+    generator_run = sobol.gen(n=1)
+    trial = experiment.new_trial(generator_run=generator_run)
+    trial.run()
+    trial.mark_completed()
+    trial_data = experiment.fetch_data().df
+    trial_results = trial_data[trial_data["trial_index"] == i]
+    ax_params = trial.arm.parameters
+    new_row = pd.DataFrame({
+        "Trial": [i+1],
+        "EPSCM3": str(ax_params['EPSCM3_AX']),
+        "REPSDC3 ": str(ax_params['REPSDC3_AX']),
+        "REPSD3 ": str(ax_params['REPSD3_AX']),
+        "Q13 ": str(ax_params['Q13_AX']),
+        "Q23 ": str(ax_params['Q23_AX']),
+        "C13 ": str(ax_params['C13_AX']),
+        "PHIP3 ": str(ax_params['PHIP3_AX']),
+        "MSE1": MSE1(),
+        "MSE2": MSE2(),
+        "MSE3": MSE3(),
+        "MSE4": MSE4(),
+        "MSE5": MSE5(),
+        "MSE6": MSE6(),
+    })
+    results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+experiment.fetch_data().df
+data = experiment.fetch_data()
+hv_list = []
+model = None
+reference_point = [0,0,0,0,0,0]
+
+for i in range(N_BATCH):
+    model = Models.BOTORCH_MODULAR(experiment=experiment,data=data,)
+    generator_run = model.gen(1)
+    trial = experiment.new_trial(generator_run=generator_run)
+    print(trial)
+    trial.run()
+    trial.mark_completed()
+    new_data = trial.fetch_data()
+    data = Data.from_multiple_data([data, new_data])
+    exp_df = exp_to_df(experiment)
+    outcomes = torch.tensor(exp_df[["a", "b", "c", "d", "e", "f"]].values, dtype=torch.float32)
+    ref_point_tensor = torch.tensor(reference_point, dtype=torch.float32)
+    partitioning = DominatedPartitioning(ref_point=ref_point_tensor, Y=outcomes)
+    # trial_data is not defined in this loop, assuming you meant to fetch data for the current trial
+    # trial_data = experiment.fetch_data().df # This fetches all data, might need filtering
+    ax_params = trial.arm.parameters
+    new_row = pd.DataFrame({
+        "Trial": [N_INIT + i + 1], # Adjust trial number for B.O. phase
+        "EPSCM3": str(ax_params['EPSCM3_AX']),
+        "REPSDC3 ": str(ax_params['REPSDC3_AX']),
+        "REPSD3 ": str(ax_params['REPSD3_AX']),
+        "Q13 ": str(ax_params['Q13_AX']),
+        "Q23 ": str(ax_params['Q23_AX']),
+        "C13 ": str(ax_params['C13_AX']),
+        "PHIP3 ": str(ax_params['PHIP3_AX']),
+        "MSE1": MSE1(),
+        "MSE2": MSE2(),
+        "MSE3": MSE3(),
+        "MSE4": MSE4(),
+        "MSE5": MSE5(),
+        "MSE6": MSE6(),
+    })
+    results_df = pd.concat([results_df, new_row], ignore_index=True)
+    try:
+        hv = partitioning.compute_hypervolume().item()
+    except Exception as e: # Catch specific exceptions if possible
+        hv = 0
+        print(f"Failed to compute hv: {e}")
+    hv_list.append(hv)
+    print(f"Iteration: {i}, HV: {hv}")
+
+outcomes = np.array(exp_to_df(experiment)[["a", "b", "c", "d", "e", "f"]], dtype=np.float32)
+file_path = r"C:\Graduation\PARAMETERS_SIMULATION\DATA\optimization_results\experiment_results.xlsx"
+# Ensure the directory exists
+os.makedirs(os.path.dirname(file_path), exist_ok=True)
+results_df.to_excel(file_path, index=False)
+print("Data saved to Excel file.")
