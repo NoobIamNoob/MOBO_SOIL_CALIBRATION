@@ -20,5 +20,7 @@ AX platform : 0.3.4<br>
 2. 
 
 # Please Check the code file
-This code was intentionally developed using hardcoding.<br> The next version will be automatically generated, will include new functions, and is expected to be released around Q1 2026 (hopefully).
+This code was intentionally developed using hardcoding.<br> 
+The next version will be automatically generated, will include new functions aiming to obtain a good quality of simulation data when blind prediction stage.<br>
+It is expected to be released around Q1 2026 (hopefully).
 
