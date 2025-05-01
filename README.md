@@ -16,8 +16,8 @@ AX platform : 0.3.4<br>
 2. A method of quantifying the discrepancy between simulation results and experimental measurements across various Cyclic Stress Ratio (CSR) values using specific metrics, and then averaging these discrepancies over all CSRs to formulate a single objective function value. The "single objective function value" does not mean that the MOBO is being processed as a single optimization manner.
 
 # Drawback of this code
-1. d
-2. 
+1. ??
+2. ??
 
 # Please Check the code file
 This code was intentionally developed using hardcoding.<br> 
