@@ -7,6 +7,7 @@ Multi-Objective Bayesian Optimization incorporating an FEM Framework for Calibra
 # Program Version Inforamtion
 FLIPROSE : 7.2.3 (Commercial Software)<br>
 Python : 3.11.5<br>
+Jupyter notebook : 7.0.6 (Didn't mention on the paper)
 Botorch : 0.9.2<br>
 AX platform : 0.3.4<br>
-Jupyter notebook : 7.0.6 (Didn't mention on the paper)
+
