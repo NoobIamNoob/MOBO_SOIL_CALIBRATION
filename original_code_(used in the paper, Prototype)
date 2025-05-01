@@ -5,7 +5,7 @@
 #In addition, there is a problem that the RAM usage keeps increasing even though there is enough RAM capacity (24GB) due to the structure of the code.
 #On top of that, it seems like there is a problem with the setting of the reference point. The reference point was set to [0,0,0,0,0,0] but considering that the optimization problem is a minimization problem,
 #I think the reference point should have been set to large values, not (0,0,0,0,0,0)
-# Please check the revised code below the original_code file on the left side. 
+# Please check the revised code below the original_code file on the left side. It is more better, faster, accurate
 
 import torch
 from ax.plot.pareto_frontier import plot_pareto_frontier
