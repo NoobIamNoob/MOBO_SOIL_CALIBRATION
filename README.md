@@ -20,4 +20,4 @@ This code was intentionally developed using hardcoding.<br>
 The next version will be automatically generated, will include new functions aiming to obtain a good quality of simulation data when blind prediction stage.<br>
 It is expected to be released around Q1 2026 (hopefully).
 
-# Unfortunately, FEM program & FEM running batch file cannot be uploaded according to the policy of FLIP corporation.
+# FEM program & FEM running batch file cannot be uploaded according to the policy of FLIP corporation.
