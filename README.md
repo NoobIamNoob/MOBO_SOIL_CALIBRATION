@@ -6,7 +6,7 @@ Multi-Objective Bayesian Optimization incorporating an FEM Framework for Calibra
 
 # Key features
 1. A methodology integrating the FEM framework with the Multi-Objective Bayesian Optimization algorithm to automatically calibrate soil constitutive model parameters, aiming to simultaneously satisfy multiple liquefaction criteria.
-2. A method of quantifying the discrepancy between simulation results and experimental measurements across various Cyclic Stress Ratio (CSR) values using specific metrics, and then averaging these discrepancies over all CSRs to formulate a single objective function value <br>**(The "single objective function value" does not mean that the MOBO is being processed as a single optimization manner).
+2. A method of quantifying the discrepancy between simulation results and experimental measurements across various Cyclic Stress Ratio (CSR) values using specific metrics, and then averaging these discrepancies over all CSRs to formulate a single objective function value. The "single objective function value" does not mean that the MOBO is being processed as a single optimization manner.
 
 
 # Program Version Inforamtion
