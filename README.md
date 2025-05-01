@@ -15,9 +15,7 @@ AX platform : 0.3.4<br>
 1. A methodology integrating the FEM framework with the Multi-Objective Bayesian Optimization algorithm to automatically calibrate soil constitutive model parameters, aiming to simultaneously satisfy multiple liquefaction criteria.
 2. A method of quantifying the discrepancy between simulation results and experimental measurements across various Cyclic Stress Ratio (CSR) values using specific metrics, and then averaging these discrepancies over all CSRs to formulate a single objective function value. The "single objective function value" does not mean that the MOBO is being processed as a single optimization manner.
 
-# Drawback of this code
-1. ??
-2. ??
+# Unfortunately, FEM program & FEM running batch file cannot be uploaded according to the policy of FLIP corporation.
 
 # Please Check the code file
 This code was intentionally developed using hardcoding.<br> 
