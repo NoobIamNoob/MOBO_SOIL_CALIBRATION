@@ -34,6 +34,7 @@ generation_strategy
 ##But the Code (qNEHVI) is still written as a comment inside the code
 ##Uploaded 2025_May_28th
 ##Version information : Python 3.13.2, Botorch 0.14.0, AX 1.0.0
+##Hard coding is uploaded intentionally
 
 ##Preprocessing
 import pandas as pd
