@@ -1,3 +1,6 @@
+##Since qNoisyExpectedHypervolumeImprovement has known numerical issues that lead to suboptimal optimization performance. according to https://arxiv.org/abs/2310.20708
+##Therefore, It is replaced as qLogNoisyExpectedHypervolumeImprovement 
+##But the Code (qNEHVI) is still written as a comment inside the code
 ##Uploaded 2025_May_28th
 ##Version information : Python 3.13.2, Botorch 0.14.0, AX 1.0.0
 
