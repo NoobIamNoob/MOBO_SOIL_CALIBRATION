@@ -1,1 +1,628 @@
-dd
+##Uploaded 2025_May_28th
+##Version information : Python 3.13.2, Botorch 0.14.0, AX 1.0.0
+
+
+import pandas as pd
+import numpy as np
+from scipy.interpolate import interp1d 
+CSR_FILE_SUFFIXES = ["17", "18", "19", "20", "21", "22", "25"]
+ACTUAL_CSR_VALUES = [0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.25]
+BASE_FILE_PATH_TEMPLATE = 'C:/Graduation/PARAMETERS_SIMULATION/EXP/eo_0_600_sigv_100_CSR_0_{}0_Tau_0_.csv'
+
+LIQUEFACTION_CRITERIA = [3.0, 4.0, 4.9, 0.25, 0.50, 0.90]
+NUM_CRITERIA = len(LIQUEFACTION_CRITERIA)
+lrc_data_collections = [[] for _ in range(NUM_CRITERIA)]
+COMMON_CSR_LIST = ACTUAL_CSR_VALUES
+SIM_LRC100_CSR = COMMON_CSR_LIST
+
+def process_and_interpolate_data(original_x_series, original_y_series, original_epwp_series):
+    x_proc = np.insert(original_x_series.values, 0, 0.0)
+    y_proc = np.insert(original_y_series.values, 0, 0.0)
+    epwp_proc = np.insert(original_epwp_series.values, 0, 0.0)
+    max_x_val = 0.0
+    if len(x_proc) > 0: 
+        max_x_val = np.ceil(np.max(x_proc))
+    x_proc = np.append(x_proc, max_x_val)
+    y_proc = np.append(y_proc, y_proc[-1] if len(y_proc) > 0 else 0.0)
+    epwp_proc = np.append(epwp_proc, epwp_proc[-1] if len(epwp_proc) > 0 else 0.0)
+    new_x_points = np.array([])
+    new_y_points = np.array([])
+    new_epwp_points = np.array([])
+    if max_x_val > 0 and len(x_proc) > 1 :
+        if np.unique(x_proc).size < 2: 
+             print(f"Warning: Not enough unique x-points for interpolation (x_proc: {x_proc}). Skipping interpolation.")
+        else:
+            try:
+                interpolate_y_func = interp1d(x_proc, y_proc, kind='linear', fill_value="extrapolate")
+                interpolate_epwp_func = interp1d(x_proc, epwp_proc, kind='linear', fill_value="extrapolate")
+                if max_x_val > 1e-9: 
+                    new_x_points = np.arange(0, max_x_val, 0.05)
+                if len(new_x_points) > 0:
+                    new_y_points = interpolate_y_func(new_x_points)
+                    new_epwp_points = interpolate_epwp_func(new_x_points)
+                else: 
+                    print(f"Warning: new_x_points for interpolation is empty (max_x_val: {max_x_val}).")
+            except ValueError as e:
+                print(f"Warning: Interpolation failed. x_proc: {x_proc}. Error: {e}")
+    return {
+        "y_for_noc_check": y_proc,   
+        "epwp_for_noc_check": epwp_proc, 
+        "x_new_interpolated": new_x_points,
+        "y_new_interpolated": new_y_points,
+        "epwp_new_interpolated": new_epwp_points,
+    }
+
+for csr_suffix in CSR_FILE_SUFFIXES:
+    file_path = BASE_FILE_PATH_TEMPLATE.format(csr_suffix)
+    df_name_for_print = f"sig100_{csr_suffix}"
+    print(f"\nProcessing {df_name_for_print} from {file_path}...")
+    try:
+        original_df = pd.read_csv(file_path)
+        if original_df.empty:
+            print(f"Warning: File {file_path} is empty. Skipping.")
+            all_files_processed_data.append(None)
+            continue
+    except FileNotFoundError:
+        print(f"ERROR: File not found {file_path}. Skipping.")
+        all_files_processed_data.append(None) 
+        continue
+    except pd.errors.EmptyDataError:
+        print(f"ERROR: File {file_path} is empty or unreadable. Skipping.")
+        all_files_processed_data.append(None) 
+        continue
+    if original_df.shape[1] <= 5:
+        print(f"ERROR: DataFrame from {file_path} has fewer than 6 columns. Skipping.")
+        all_files_processed_data.append(None)
+        continue
+    x_col_original = original_df.iloc[:, 0]
+    y_col_original = original_df.iloc[:, 1]
+    epwp_col_original = original_df.iloc[:, 5]
+    processed_data_results = process_and_interpolate_data(x_col_original, y_col_original, epwp_col_original)
+    all_files_processed_data.append(processed_data_results)
+    for crit_idx in range(NUM_CRITERIA):
+        current_criterion_value = LIQUEFACTION_CRITERIA[crit_idx]
+        target_lrc_data_list_for_criterion = lrc_data_collections[crit_idx]
+        is_epwp_criterion = (crit_idx >= 3)
+        data_source_name_for_print = "epwp" if is_epwp_criterion else "y"
+        array_for_noc_condition = (
+            processed_data_results["epwp_for_noc_check"]
+            if is_epwp_criterion
+            else processed_data_results["y_for_noc_check"]
+        )
+        found_indices = np.where(array_for_noc_condition > current_criterion_value)[0]
+        if len(found_indices) > 0:
+            idx_in_modified_array = found_indices[0]
+            try:
+                noc_value = original_df.iloc[idx_in_modified_array, 0]
+                target_lrc_data_list_for_criterion.append(noc_value)
+                print(f"  For criterion {current_criterion_value} ({data_source_name_for_print}), NOC for {df_name_for_print}: {noc_value}")
+            except IndexError:
+                print(f"  IndexError: For {df_name_for_print}, criterion {current_criterion_value}. "
+                      f"Index {idx_in_modified_array} (from modified array) is out of bounds for original DataFrame (len {len(original_df)}). "
+                      f"NOC not recorded.")
+        else:
+            print(f"  For criterion {current_criterion_value} ({data_source_name_for_print}), no values in {df_name_for_print} (modified data) exceed threshold.")
+
+print("\n--- Summary of LRC Data Collections ---")
+for i, data_list in enumerate(lrc_data_collections):
+    print(f"LRC_data_collection for criterion {LIQUEFACTION_CRITERIA[i]} (Original: LRC100_data{i+1}): {data_list}")
+print(f"\nSIM_LRC100_CSR: {SIM_LRC100_CSR}")
+print(f"COMMON_CSR_LIST (Value for all original LRC100_CSRN variables): {COMMON_CSR_LIST}")
+
+import re
+data1_list = []
+data2_list = []
+data3_list = []
+with open("C:/Graduation/PARAMETERS_SIMULATION/DATA/100_0.17/stat1.d", 'r') as f:
+    data1 = f.readlines()
+data1_list = [re.split(r'(\s+)', line) for line in data1]  
+with open("C:/Graduation/PARAMETERS_SIMULATION/DATA/100_0.17/stat2.d", 'r') as f:
+    data2 = f.readlines()
+data2_list = [re.split(r'(\s+)', line) for line in data2]
+with open("C:/Graduation/PARAMETERS_SIMULATION/DATA/100_0.17/stat3.d", 'r') as f:
+    data3 = f.readlines()
+data3_list = [re.split(r'(\s+)', line) for line in data3]
+
+PA3= data3_list[8][2]
+GMA3= data3_list[8][4]
+MG3= data3_list[8][6]
+KLA3= data3_list[8][8]
+KUA3= data3_list[8][10]
+NK3= data3_list[8][12]
+AA3= data3_list[8][14]
+BB3 = data3_list[8][16]
+RHO3= data3_list[10][2]
+N3= data3_list[10][4]
+KF3= data3_list[10][6]
+WIDTH3= data3_list[10][8]
+L3= data3_list[10][10]
+JOINTS3= data3_list[10][12]
+LR3= data3_list[10][14]
+IAABB3= data3_list[10][16]
+FAABB3= data3_list[10][18]
+IUST3= data3_list[10][20]
+KILL3 = data3_list[10][22]
+HMAX3= data3_list[12][2]
+PR03= data3_list[12][4]
+PRY3= data3_list[12][6]
+HMAXL3= data3_list[12][8]
+IS123= data3_list[12][10]
+IRYL3= data3_list[12][12]
+ALPHAE3= data3_list[12][14]
+BETAE3= data3_list[12][16]
+NSPR43= data3_list[12][18]
+IDLSW3 = data3_list[12][20]
+COH3= data3_list[14][2]
+PHIF3= data3_list[14][4]
+PHIP3= data3_list[14][6]
+EPSCM3= data3_list[14][8]
+REPSDC3= data3_list[14][10]
+ITERMD3= data3_list[14][12]
+STOL3 = data3_list[14][14]
+REPSD3= data3_list[16][2]
+Q13= data3_list[16][4]
+Q23= data3_list[16][6]
+RKPP3= data3_list[16][8]
+PLK3= data3_list[16][10]
+RK3= data3_list[16][12]
+S13= data3_list[16][14]
+C13 = data3_list[16][16]
+QUS3= data3_list[18][2]
+Q43= data3_list[18][4]
+RGAMMA3= data3_list[18][6]
+RRMTMP3= data3_list[18][8]
+I865SW3 = data3_list[18][10]
+
+import os
+def MSE1():
+    folders = ['100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25']
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]: 
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {'time': time,'pex': pex,'strain': strain,'number_of_rows': number_of_rows}
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        for i in range(len(strain)):
+            if strain[i] > LIQUEFACTION_CRITERIA[0]*0.01 :
+                lrc_cycle1 = time[i]  
+                break
+            else: lrc_cycle1 = 100  
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-lrc_data_collections[0][0],
+        data['100_0.18']['lrc_cycle1']-lrc_data_collections[0][1],
+        data['100_0.19']['lrc_cycle1']-lrc_data_collections[0][2],
+        data['100_0.20']['lrc_cycle1']-lrc_data_collections[0][3],
+        data['100_0.21']['lrc_cycle1']-lrc_data_collections[0][4],
+        data['100_0.22']['lrc_cycle1']-lrc_data_collections[0][5],
+        data['100_0.25']['lrc_cycle1']-lrc_data_collections[0][6]
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1) 
+    return MSE_1001
+def MSE2():
+    folders = ['100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25']
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:  
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {'time': time,'pex': pex,'strain': strain,'number_of_rows': number_of_rows}
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        for i in range(len(strain)):
+            if strain[i] > LIQUEFACTION_CRITERIA[1]*0.01 :
+                lrc_cycle1 = time[i]  
+                break
+            else: lrc_cycle1 = 100  
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-lrc_data_collections[1][0],
+        data['100_0.18']['lrc_cycle1']-lrc_data_collections[1][1],
+        data['100_0.19']['lrc_cycle1']-lrc_data_collections[1][2],
+        data['100_0.20']['lrc_cycle1']-lrc_data_collections[1][3],
+        data['100_0.21']['lrc_cycle1']-lrc_data_collections[1][4],
+        data['100_0.22']['lrc_cycle1']-lrc_data_collections[1][5],
+        data['100_0.25']['lrc_cycle1']-lrc_data_collections[1][6]
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1) 
+    return MSE_1001    
+def MSE3():
+    folders = ['100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25']
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]:  
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {'time': time,'pex': pex,'strain': strain,'number_of_rows': number_of_rows}
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        for i in range(len(strain)):
+            if strain[i] > LIQUEFACTION_CRITERIA[2]*0.01 :
+                lrc_cycle1 = time[i]  
+                break
+            else: lrc_cycle1 = 100  
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-lrc_data_collections[2][0],
+        data['100_0.18']['lrc_cycle1']-lrc_data_collections[2][1],
+        data['100_0.19']['lrc_cycle1']-lrc_data_collections[2][2],
+        data['100_0.20']['lrc_cycle1']-lrc_data_collections[2][3],
+        data['100_0.21']['lrc_cycle1']-lrc_data_collections[2][4],
+        data['100_0.22']['lrc_cycle1']-lrc_data_collections[2][5],
+        data['100_0.25']['lrc_cycle1']-lrc_data_collections[2][6]
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1) 
+    return MSE_1001        
+def MSE4():
+    folders = ['100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25']
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]: 
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {'time': time,'pex': pex,'strain': strain,'number_of_rows': number_of_rows}
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        for i in range(len(strain)):
+            if strain[i] > LIQUEFACTION_CRITERIA[3]*0.01 :
+                lrc_cycle1 = time[i]  
+                break
+            else: lrc_cycle1 = 100  
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-lrc_data_collections[3][0],
+        data['100_0.18']['lrc_cycle1']-lrc_data_collections[3][1],
+        data['100_0.19']['lrc_cycle1']-lrc_data_collections[3][2],
+        data['100_0.20']['lrc_cycle1']-lrc_data_collections[3][3],
+        data['100_0.21']['lrc_cycle1']-lrc_data_collections[3][4],
+        data['100_0.22']['lrc_cycle1']-lrc_data_collections[3][5],
+        data['100_0.25']['lrc_cycle1']-lrc_data_collections[3][6]
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1) 
+    return MSE_1001        
+def MSE5():
+    folders = ['100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25']
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]: 
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {'time': time,'pex': pex,'strain': strain,'number_of_rows': number_of_rows}
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        for i in range(len(strain)):
+            if strain[i] > LIQUEFACTION_CRITERIA[4]*0.01 :
+                lrc_cycle1 = time[i]  
+                break
+            else: lrc_cycle1 = 100  
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-lrc_data_collections[4][0],
+        data['100_0.18']['lrc_cycle1']-lrc_data_collections[4][1],
+        data['100_0.19']['lrc_cycle1']-lrc_data_collections[4][2],
+        data['100_0.20']['lrc_cycle1']-lrc_data_collections[4][3],
+        data['100_0.21']['lrc_cycle1']-lrc_data_collections[4][4],
+        data['100_0.22']['lrc_cycle1']-lrc_data_collections[4][5],
+        data['100_0.25']['lrc_cycle1']-lrc_data_collections[4][6]
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1) 
+    return MSE_1001    
+def MSE6():
+    folders = ['100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25']
+    data = {}
+    for folder in folders:
+        pex = []
+        strain = []
+        file_path = os.path.join('C:/Graduation/PARAMETERS_SIMULATION/DATA', folder, 'OUTPUT', 'stat3.25')
+        with open(file_path, 'r') as f:
+            graph = f.readlines()
+            for line in graph[2:]: 
+                columns = line.split()
+                val1 = float(columns[0])
+                val2 = float(columns[1])
+                pex.append(val1)
+                strain.append(val2)
+        number_of_rows = len(pex)
+        time = np.arange(0, number_of_rows * 0.005, 0.005)
+        data[folder] = {'time': time,'pex': pex,'strain': strain,'number_of_rows': number_of_rows}
+    for folder in data:
+        time = data[folder]['time']
+        pex = data[folder]['pex']
+        strain = data[folder]['strain']
+        time_pex = [(time[i], pex[i]) for i in range(len(pex))]
+        time_strain = [(time[i], strain[i]) for i in range(len(strain))]
+        data[folder]['time_pex'] = time_pex
+        data[folder]['time_strain'] = time_strain
+    for folder in data:
+        strain = data[folder]['strain']
+        time = data[folder]['time']
+        lrc_cycle1 = None
+        for i in range(len(strain)):
+            if strain[i] > LIQUEFACTION_CRITERIA[5]*0.01 :
+                lrc_cycle1 = time[i]  
+                break
+            else: lrc_cycle1 = 100  
+        data[folder]['lrc_cycle1'] = lrc_cycle1
+    discrepancies_1001 = [
+        data['100_0.17']['lrc_cycle1']-lrc_data_collections[5][0],
+        data['100_0.18']['lrc_cycle1']-lrc_data_collections[5][1],
+        data['100_0.19']['lrc_cycle1']-lrc_data_collections[5][2],
+        data['100_0.20']['lrc_cycle1']-lrc_data_collections[5][3],
+        data['100_0.21']['lrc_cycle1']-lrc_data_collections[5][4],
+        data['100_0.22']['lrc_cycle1']-lrc_data_collections[5][5],
+        data['100_0.25']['lrc_cycle1']-lrc_data_collections[5][6]
+    ]
+    MSE_1001 = np.mean(np.square(discrepancies_1001))/np.std(np.abs(discrepancies_1001), ddof=1) 
+    return MSE_1001   
+
+def run_sim(base_dir, folders):
+    for folder in folders:
+        bat_file_path = os.path.join(base_dir, folder, 'FLIP_GROUP.BAT')
+        os.chdir(os.path.dirname(bat_file_path))
+        try:
+            subprocess.run([bat_file_path], check=True, shell=True)
+        except subprocess.CalledProcessError as e:
+            print(f"BAT filed to execute file: {e}")
+            print("Return code:", e.returncode)
+base_dir = r'C:\Graduation\PARAMETERS_SIMULATION\DATA'
+folders = [
+    '100_0.17', '100_0.18', '100_0.19', '100_0.20', '100_0.21', '100_0.22', '100_0.25'
+]
+
+import os
+import time
+from typing import Any, Mapping, Dict
+from ax.api.client import Client
+from ax.api.configs import RangeParameterConfig
+from ax.api.protocols.metric import IMetric
+from ax.api.protocols.runner import IRunner, TrialStatus
+from ax.api.types import TParameterization
+
+class MyRunner(IRunner):
+    def run_trial(
+        self, trial_index: int, parameterization: TParameterization
+    ) -> Dict[str, Any]:
+        print(f"[MyRunner] run_trial 시작: trial_index={trial_index}, 파라미터={parameterization}")
+        file_name = f"{int(time.time())}.txt"        
+        for folder in folders:
+            file_path = f"{base_dir}/{folder}/stat3.d"  
+            with open(file_path, 'r') as f:
+                data3 = f.readlines()
+            data3_list = [re.split(r'(\s+)', line) for line in data3]
+            data3_list[14][8] = f"{(parameterization['EPSCM3_AX'] * 0.01):.2f}"   # EPSCM3
+            data3_list[14][10] = f"{(parameterization['REPSDC3_AX'] * 0.01):.2f}" # REPSDC3
+            data3_list[16][2] = f"{(parameterization['REPSD3_AX'] * 0.001):.3f}"  # REPSD3 
+            data3_list[16][4] = f"{(parameterization['Q13_AX'] * 0.01):.2f}"     # Q13
+            data3_list[16][6] = f"{(parameterization['Q23_AX'] * 0.01):.2f}"     # Q23
+            data3_list[16][16] = f"{(parameterization['C13_AX'] * 0.01):.2f}"    # C13
+            data3_list[14][6] = f"{(parameterization['PHIP3_AX'] * 0.01):.2f}"    # PHIP3          
+            with open(file_path, 'w') as f:
+                for line in data3_list:
+                    f.write("".join(line))
+        run_sim(base_dir, folders)
+        print(f"  DONE FEM SIM RUNNING.")
+        results = {"mse1": MSE1(),"mse2": MSE2(),"mse3": MSE3(),"mse4": MSE4(),"mse5": MSE5(),"mse6": MSE6()}
+        print(results)
+        with open(file_name, "w") as f:
+            f.write(f"{results}")            
+        return {"file_name": file_name} 
+
+def poll_trial(
+        self, trial_index: int, trial_metadata: Mapping[str, Any]
+    ) -> TrialStatus:
+        file_name = trial_metadata["file_name"]
+        time_elapsed = time.time() - int(file_name[:4])
+        if time_elapsed < 5:
+            return TrialStatus.RUNNING
+        return TrialStatus.COMPLETED
+
+class Metric1(IMetric):
+    def __init__(self, name: str, lower_is_better: bool = True):
+        super().__init__(name=name)
+        self.lower_is_better = lower_is_better
+    def fetch(
+        self,
+        trial_index: int,
+        trial_metadata: Mapping[str, Any],
+    ) -> tuple[float, float | None]:
+            value = float(MSE1())
+            return (0, value)
+
+class Metric2(IMetric):
+    def __init__(self, name: str, lower_is_better: bool = True):
+        super().__init__(name=name)
+        self.lower_is_better = lower_is_better
+    def fetch(
+        self,
+        trial_index: int,
+        trial_metadata: Mapping[str, Any],
+    ) -> tuple[float, float | None]:
+            value2 = float(MSE2())
+            return (0, value2)
+
+class Metric3(IMetric):
+    def __init__(self, name: str, lower_is_better: bool = True):
+        super().__init__(name=name)
+        self.lower_is_better = lower_is_better
+    def fetch(
+        self,
+        trial_index: int,
+        trial_metadata: Mapping[str, Any],
+    ) -> tuple[float, float | None]:
+            value3 = float(MSE3())
+            return (0, value3)
+
+class Metric4(IMetric):
+    def __init__(self, name: str, lower_is_better: bool = True):
+        super().__init__(name=name)
+        self.lower_is_better = lower_is_better
+    def fetch(
+        self,
+        trial_index: int,
+        trial_metadata: Mapping[str, Any],
+    ) -> tuple[float, float | None]:
+            value4 = float(MSE4())
+            return (0, value4)
+
+class Metric5(IMetric):
+    def __init__(self, name: str, lower_is_better: bool = True):
+        super().__init__(name=name)
+        self.lower_is_better = lower_is_better
+    def fetch(
+        self,
+        trial_index: int,
+        trial_metadata: Mapping[str, Any],
+    ) -> tuple[float, float | None]:
+            value5 = float(MSE5())
+            return (0, value5)
+
+class Metric6(IMetric):
+    def __init__(self, name: str, lower_is_better: bool = True):
+        super().__init__(name=name)
+        self.lower_is_better = lower_is_better
+    def fetch(
+        self,
+        trial_index: int,
+        trial_metadata: Mapping[str, Any],
+    ) -> tuple[float, float | None]:
+            value6 = float(MSE6())
+            return (0, value6)
+
+mse1_metric = Metric1(name="mse1")
+mse2_metric = Metric2(name="mse2")
+mse3_metric = Metric3(name="mse3")
+mse4_metric = Metric4(name="mse4")
+mse5_metric = Metric5(name="mse5")
+mse6_metric = Metric6(name="mse6")
+
+client = Client()
+parameters = [
+    RangeParameterConfig(name="EPSCM3_AX", bounds=(100, 400), parameter_type="int"),
+    RangeParameterConfig(name="REPSDC3_AX", bounds=(1, 500), parameter_type="int"),
+    RangeParameterConfig(name="REPSD3_AX", bounds=(1, 5000), parameter_type="int"),
+    RangeParameterConfig(name="Q13_AX", bounds=(1, 1000), parameter_type="int"),
+    RangeParameterConfig(name="Q23_AX", bounds=(1, 200), parameter_type="int"),
+    RangeParameterConfig(name="C13_AX", bounds=(1, 500), parameter_type="int"),
+    RangeParameterConfig(name="PHIP3_AX", bounds=(2000, 3800), parameter_type="int")
+]
+client.configure_experiment(parameters=parameters)
+client.configure_optimization(objective="-mse1,-mse2,-mse3,-mse4,-mse5,-mse6")
+client.configure_metrics(
+    metrics=[
+        mse1_metric,
+        mse2_metric,
+        mse3_metric,
+        mse4_metric,
+        mse5_metric,
+        mse6_metric
+    ]
+)
+client.configure_runner(runner=runner)
+client.run_trials(
+    max_trials=500,
+    parallelism=1,
+    tolerated_trial_failure_rate=0.1,
+    initial_seconds_between_polls=1,
+)
