@@ -482,6 +482,17 @@ from ax.api.configs import RangeParameterConfig
 from ax.api.protocols.metric import IMetric
 from ax.api.protocols.runner import IRunner, TrialStatus
 from ax.api.types import TParameterization
+from ax.generation_strategy.center_generation_node import CenterGenerationNode
+from ax.generation_strategy.transition_criterion import MinTrials
+from ax.generation_strategy.generation_strategy import GenerationStrategy
+from ax.generation_strategy.generation_node import GenerationNode
+from ax.generation_strategy.model_spec import GeneratorSpec
+from ax.modelbridge.registry import Generators
+from gpytorch.kernels import MaternKernel
+from botorch.models import SingleTaskGP
+from ax.utils.stats.model_fit_stats import MSE
+from ax.models.torch.botorch_modular.surrogate import SurrogateSpec, ModelConfig
+from botorch.acquisition.multi_objective.monte_carlo import qNoisyExpectedHypervolumeImprovement
 
 class MyRunner(IRunner):
     def run_trial(
@@ -610,8 +621,10 @@ parameters = [
     RangeParameterConfig(name="C13_AX", bounds=(1, 500), parameter_type="int"),
     RangeParameterConfig(name="PHIP3_AX", bounds=(2000, 3800), parameter_type="int")
 ]
+
 client.configure_experiment(parameters=parameters)
 client.configure_optimization(objective="-mse1,-mse2,-mse3,-mse4,-mse5,-mse6")
+client.configure_runner(runner=runner)
 client.configure_metrics(
     metrics=[
         mse1_metric,
@@ -622,10 +635,90 @@ client.configure_metrics(
         mse6_metric
     ]
 )
-client.configure_runner(runner=runner)
+
+max_trials = 500
+# Define the node name for the Modular BoTorch model.
+botorch_node_name = "BoTorch qNEHVI"
+# --- Surrogate Specification ---
+surrogate_spec = SurrogateSpec(
+    model_configs=[
+        ModelConfig(
+            botorch_model_class=SingleTaskGP,  # Use SingleTaskGP for single-objective optimization.
+            covar_module_class=MaternKernel,  # Use MaternKernel for the covariance function.
+            covar_module_options={"nu": 2.5},  # Specific options for the MaternKernel.
+        ),
+    ],
+    eval_criterion=MSE,  # Selects the model that minimizes Mean Squared Error.
+    allow_batched_models=False,  # Ensures each metric is modeled independently.
+)
+# --- Generator Specification ---
+generator_spec = GeneratorSpec(
+    model_enum=Generators.BOTORCH_MODULAR,  # Specifies the Modular BoTorch generator.
+    model_kwargs={
+        "surrogate_spec": surrogate_spec,  # Links to the defined surrogate model.
+        "botorch_acqf_class": qNoisyExpectedHypervolumeImprovement,  # Uses qNEHVI for multi-objective acquisition.
+        "acquisition_options": {
+        #"ref_point": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # Example: Adjust this based on your 6 objective ranges
+        },
+    },
+    model_gen_kwargs={
+        "model_gen_options": {
+            "optimizer_kwargs": {
+                "num_restarts": 20,  # Number of restarts for the acquisition function optimizer.
+                "sequential": True,  # Whether to optimize acquisition function sequentially.
+                "options": {
+                    #"batch_limit": 5,  # Max number of points to generate in a batch.
+                    #"maxiter": 200,  # Max iterations for the optimizer.
+                },
+            },
+        },
+    }
+)
+# --- Generation Nodes Definition ---
+# 1. BoTorch Node: The main optimization node using the specified generator.
+botorch_node = GenerationNode(
+    node_name=botorch_node_name,
+    model_specs=[generator_spec],
+)
+# 2. Sobol Node: Used for initial exploration.
+sobol_node = GenerationNode(
+    node_name="Sobol",
+    model_specs=[
+        GeneratorSpec(
+            model_enum=Generators.SOBOL,  # Specifies the Sobol generator for initial points.
+        ),
+    ],
+    transition_criteria=[
+        MinTrials(
+            threshold=(max_trials / 2) - 1,
+            transition_to=botorch_node.node_name,  # Specifies the next node to transition to.
+            use_all_trials_in_exp=True,  # Considers all trials in the experiment for the threshold.
+        )
+    ]
+)
+
+# --- Construct the Generation Strategy ---
+# Combines the defined nodes into a complete generation strategy.
+generation_strategy = GenerationStrategy(
+    name=f"Sobol+{botorch_node_name}",
+    nodes=[sobol_node, botorch_node]
+)
+
+# Print the constructed generation strategy (for verification or inspection).
+print(generation_strategy)
+client.set_generation_strategy(
+    generation_strategy=generation_strategy,
+)
+
 client.run_trials(
-    max_trials=500,
+    max_trials,
     parallelism=1,
     tolerated_trial_failure_rate=0.1,
     initial_seconds_between_polls=1,
 )
+
+frontier = client.get_pareto_frontier()
+for parameters, metrics, trial_index, arm_name in frontier:
+    cards = client.compute_analyses(display=True)
+
+client._experiment.to_df()
