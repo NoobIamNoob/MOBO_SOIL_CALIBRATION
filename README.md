@@ -21,3 +21,6 @@ The next version will be automatically generated, will include new functions aim
 It is expected to be released around Q1 2026 (hopefully).
 
 # FEM program & FEM running batch file cannot be uploaded according to the policy of FLIP corporation.
+
+# Setting a domain of the parameter 
+When setting a domain of the parameter, it is recommended (not sure) to convert into a int form for this case.
